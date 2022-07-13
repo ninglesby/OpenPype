@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """Maya look extractor."""
 import os
-import sys
+import traceback
 import json
 import tempfile
 import platform
@@ -22,11 +22,6 @@ COPY = 1
 HARDLINK = 2
 
 
-def escape_space(path):
-    """Ensure path is enclosed by quotes to allow paths with spaces"""
-    return '"{}"'.format(path) if " " in path else path
-
-
 def find_paths_by_hash(texture_hash):
     """Find the texture hash key in the dictionary.
 
@@ -43,7 +38,7 @@ def find_paths_by_hash(texture_hash):
     return legacy_io.distinct(key, {"type": "version"})
 
 
-def maketx(source, destination, *args):
+def maketx(source, destination, additional_args):
     """Make `.tx` using `maketx` with some default settings.
 
     The settings are based on default as used in Arnold's
@@ -78,13 +73,14 @@ def maketx(source, destination, *args):
         "--checknan",
         # use oiio-optimized settings for tile-size, planarconfig, metadata
         "--oiio",
-        "--filter lanczos3",
+        "--filter", "lanczos3",
     ]
 
-    cmd.extend(args)
-    cmd.extend(["-o", escape_space(destination), escape_space(source)])
-
-    cmd = " ".join(cmd)
+    if additional_args:
+        cmd.extend(additional_args)
+    cmd.extend(
+        ["-o", destination, source]
+    )
 
     CREATE_NO_WINDOW = 0x08000000  # noqa
     kwargs = dict(args=cmd, stderr=subprocess.STDOUT)
@@ -95,8 +91,6 @@ def maketx(source, destination, *args):
         out = subprocess.check_output(**kwargs)
     except subprocess.CalledProcessError as exc:
         print(exc)
-        import traceback
-
         traceback.print_exc()
         raise
 
@@ -486,12 +480,12 @@ class ExtractLook(openpype.api.Extractor):
         if do_maketx and ext != ".tx":
             # Produce .tx file in staging if source file is not .tx
             converted = os.path.join(staging, "resources", fname + ".tx")
-
+            make_tx_args = [
+                "-sattrib", "sourceHash", texture_hash
+            ]
             if linearize:
                 self.log.info("tx: converting sRGB -> linear")
-                colorconvert = "--colorconvert sRGB linear"
-            else:
-                colorconvert = ""
+                make_tx_args.extend(["--colorconvert", "sRGB", "linear"])
 
             # Ensure folder exists
             if not os.path.exists(os.path.dirname(converted)):
@@ -502,10 +496,7 @@ class ExtractLook(openpype.api.Extractor):
                 filepath,
                 converted,
                 # Include `source-hash` as string metadata
-                "-sattrib",
-                "sourceHash",
-                escape_space(texture_hash),
-                colorconvert,
+                make_tx_args
             )
 
             return converted, COPY, texture_hash
