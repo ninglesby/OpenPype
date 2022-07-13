@@ -486,6 +486,7 @@ class ExtractLook(openpype.api.Extractor):
             if linearize:
                 self.log.info("tx: converting sRGB -> linear")
                 make_tx_args.extend(["--colorconvert", "sRGB", "linear"])
+                make_tx_args.extend(self.get_colorconvert_args())
 
             # Ensure folder exists
             if not os.path.exists(os.path.dirname(converted)):
@@ -502,6 +503,15 @@ class ExtractLook(openpype.api.Extractor):
             return converted, COPY, texture_hash
 
         return filepath, COPY, texture_hash
+
+    def get_colorconvert_args(self):
+        maketx_version_has_ocio = "SOMETHING SOMETHING"
+        if not maketx_version_has_ocio:
+            return []
+
+        ocio_config = "SOMETHING SOMETHING"
+
+        return ["--colorconfig", ocio_config]
 
 
 class ExtractModelRenderSets(ExtractLook):
